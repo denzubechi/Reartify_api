@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Merchant entity
+model Merchant {
+  id               Int              @id @default(autoincrement())
+  firstname        String?
+  lastname         String?
+  username         String?
+  profilePhoto      String?
+  email            String           @unique
+  password         String?
+  emailVerified    Boolean          @default(false)
+  subscriptionPlanId  Int?
+  subscriptionPlan    SubscriptionPlan?  @relation(fields: [subscriptionPlanId], references: [id]) // Associate each merchant with a subscription plan
+  products         Product[]
+  reviews          Review[]
+  orders           Order[] 
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+// Product entity
+model Product {
+  id              Int      @id @default(autoincrement())
+  merchant        Merchant @relation(fields: [merchantId], references: [id])
+  merchantId      Int
+  name            String
+  description     String?
+  image           String?
+  productType     ProductType
+  price           Float
+  reviews         Review[]
+   orders          Order[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum ProductType {
+  ART
+  DESIGN
+  PHOTOGRAPH
+  TEMPLATE
+  COURSE
+  NFT
+}
+
+// Review entity
+model Review {
+  id          Int      @id @default(autoincrement())
+  merchant    Merchant @relation(fields: [merchantId], references: [id])
+  merchantId  Int
+  product     Product  @relation(fields: [productId], references: [id])
+  productId   Int
+  stars       Int
+  comments    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// SubscriptionPlan entity
+model SubscriptionPlan {
+  id                   Int      @id @default(autoincrement())
+  name                 String   @unique
+  price                Float
+  maxProductsPerMerchant Int
+  merchants            Merchant[] // Adding the opposite relation field
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model Order {
+  id            Int       @id @default(autoincrement())
+  merchant      Merchant  @relation(fields: [merchantId], references: [id])
+  merchantId    Int
+  products      Product[] // Assuming each order can have multiple products
+  totalPrice    Float
+  status        String    // Status of the order (e.g., "pending", "completed", "cancelled")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}

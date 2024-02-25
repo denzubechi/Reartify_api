@@ -1,0 +1,1 @@
+To migrate a database,navigate to the directory of the shema.prisma and enter this command in your terminal "npx prisma migrate dev"npx 
