@@ -29,6 +29,23 @@ router.get('/profile', isAuthenticated, async (req: CustomRequest, res: Response
     }
   });
 
+  // Update Profile Route - Username
+router.put('/username', isAuthenticated, async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+        const merchantId = req.merchantId;
+        const { username } = req.body;
+
+        // Update username in the database
+        const updatedMerchant = await prisma.merchant.update({
+            where: { id: merchantId },
+            data: { username },
+        });
+
+        res.status(200).json({ message: 'Username updated successfully', merchant: updatedMerchant });
+    } catch (error) {
+        next(error);
+    }
+});
 //Update Merchant Profile
 router.put('/profile', isAuthenticated,  async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
