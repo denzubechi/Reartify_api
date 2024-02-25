@@ -6,6 +6,8 @@ import prisma from '../../database/db';
 import { body, validationResult } from 'express-validator';
 import { generateVerificationToken } from '../../utils/merchant/generateVerificationToken';
 import { sendVerificationEmail } from '../../utils/merchant/sendVerificationEmail';
+import { sendVerificationCode } from '../../utils/merchant/sendVerificationCode';
+import { generateVerificationCode } from '../../utils/merchant/generateVerificationCode';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import NodeCache from 'node-cache';
@@ -159,11 +161,107 @@ router.post('/reset-password', async (req: Request, res: Response, next: NextFun
 function checkIfResetTokenIsValid(token: string): boolean {
   return tokenCache.has(token);
 }
+function checkIfVerficationCodeIsValid(code: string): boolean {
+  return tokenCache.has(code);
+}
 
 // Function to remove the reset token from the cache
 function removeResetToken(token: string): void {
   tokenCache.del(token);
 }
+
+
+
+// Resend Verification Code Route
+router.post('/resend-verification-code', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email } = req.body;
+
+    // Find the merchant by email
+    const merchant = await prisma.merchant.findUnique({
+      where: { email },
+    });
+
+    // Check if the merchant exists
+    if (!merchant) {
+      return res.status(404).json({ message: 'Merchant not found' });
+    }
+
+    // Check if the merchant is already verified
+    if (merchant.emailVerified) {
+      return res.status(400).json({ message: 'Email already verified' });
+    }
+
+    // Generate a new verification code
+    const newVerificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // Save the new code in the token cache with an expiration time
+    tokenCache.set(newVerificationCode, true,3600);
+
+    // Send the new verification code to the user (you can use your email sending logic here)
+    await sendVerificationCode(email, newVerificationCode);
+
+    res.status(200).json({ message: 'Verification code resent successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Verification Route
+router.post('/verify-code', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, verificationCode } = req.body;
+
+    // Find the merchant by email
+    const merchant = await prisma.merchant.findUnique({
+      where: { email },
+    });
+
+    // Check if the merchant exists
+    if (!merchant) {
+      return res.status(404).json({ message: 'Merchant not found' });
+    }
+
+    // Check if the merchant is already verified
+    if (merchant.emailVerified) {
+      return res.status(400).json({ message: 'Email already verified' });
+    }
+
+    // Check if the verification code is in the cache
+    const isTokenValid = checkIfVerficationCodeIsValid(verificationCode);
+    if (!isTokenValid) {
+      return res.status(400).json({ message: 'Invalid or expired verification code' });
+    }
+
+    // Clear the verification code from the token cache
+    tokenCache.del(verificationCode);
+
+    // Update the merchant's emailVerified status to true
+    const updatedMerchant = await prisma.merchant.update({
+      where: { id: merchant.id },
+      data: { emailVerified: true },
+    });
+
+    // Log in the user after successful verification
+    req.login(updatedMerchant, (err) => {
+      if (err) {
+        return next(err);
+      }
+
+      // Return a success response
+      return res.status(200).json({
+        message: 'Email verified successfully',
+        merchant: updatedMerchant,
+      });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+
+
+
 // Account Verification Route
 router.get('/verify/:token', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -278,5 +376,12 @@ router.get('/verify/:token', async (req: Request, res: Response, next: NextFunct
 // router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => {
 //   res.redirect('/store');
 // });
+
+router.use("/logout",(req: Request, res: Response, next: NextFunction) => {
+  req.logout(function(err) {
+    if (err) { return next(err); }
+    res.redirect(`${process.env.CLIENT_URL}/login`);
+  });
+})
 
 export { router as MerchantAuthRouter };
